@@ -514,6 +514,7 @@ typedef int MpSocket;
 typedef pthread_t MicroProfileThread;
 #elif defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 #undef WIN32_LEAN_AND_MEAN
 typedef HANDLE MicroProfileThread;
