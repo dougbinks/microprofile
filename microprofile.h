@@ -513,6 +513,9 @@ typedef int MpSocket;
 #if defined(__APPLE__) || defined(__linux__)
 typedef pthread_t MicroProfileThread;
 #elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#undef WIN32_LEAN_AND_MEAN
 typedef HANDLE MicroProfileThread;
 #else
 typedef std::thread* MicroProfileThread;
