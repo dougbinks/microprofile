@@ -51,7 +51,11 @@ uint32_t g_nQuit = 0;
 void StartFakeWork();
 void StopFakeWork();
 
+#define DUMP_SPIKE_TEST 0
 
+MICROPROFILE_DECLARE_LOCAL_ATOMIC_COUNTER(ThreadsStarted);
+MICROPROFILE_DEFINE_LOCAL_ATOMIC_COUNTER(ThreadSpinSleep, "/runtime/spin_sleep");
+MICROPROFILE_DECLARE_LOCAL_COUNTER(LocalCounter);
 int main(int argc, char* argv[])
 {
 	MicroProfileOnThreadCreate("Main");
@@ -64,6 +68,7 @@ int main(int argc, char* argv[])
 
 	MicroProfileStartContextSwitchTrace();
 
+	MICROPROFILE_COUNTER_CONFIG("/runtime/localcounter", MICROPROFILE_COUNTER_FORMAT_BYTES, 500, 0);
 
 	MICROPROFILE_COUNTER_ADD("memory/main", 1000);
 	MICROPROFILE_COUNTER_ADD("memory/gpu/vertexbuffers", 1000);
@@ -86,6 +91,10 @@ int main(int argc, char* argv[])
 	MICROPROFILE_COUNTER_ADD("//\\\\///lala////lelel", 1000);
 
 
+	#if DUMP_SPIKE_TEST
+	MicroProfileDumpFile("spike.html", "spike.csv", 200.f, -1.f);
+	#endif	
+
 	StartFakeWork();
 	while(!g_nQuit)
 	{
@@ -93,13 +102,37 @@ int main(int argc, char* argv[])
 		{
 			usleep(16000);
 		}
+		MICROPROFILE_COUNTER_LOCAL_ADD(LocalCounter, 3);
+		MICROPROFILE_COUNTER_LOCAL_SUB(LocalCounter, 1);
 		MicroProfileFlip(0);
 		static bool once = false;
 		if(!once)
 		{
+
 			once = 1;
 			printf("open localhost:%d in chrome to capture profile data\n", MicroProfileWebServerPort());
 		}
+
+		#if DUMP_SPIKE_TEST
+		static int nCounter = 0;
+		if(nCounter < 200)
+		{
+			printf("\r%5d/200", nCounter++);
+			fflush(stdout);
+			if(nCounter == 200)
+			{
+				printf("\nsleeping 1s\n");
+				MICROPROFILE_SCOPEI("SPIKE_TEST", "Test", 0xff00ff00);
+				usleep(1000*1000);	
+				printf("sleep done, spike.html should be saved in 5 frames\n");
+			}
+		}
+		#endif
+
+
+		MICROPROFILE_COUNTER_LOCAL_UPDATE_ADD(ThreadsStarted);
+		MICROPROFILE_COUNTER_LOCAL_UPDATE_SET(ThreadSpinSleep);
+		MICROPROFILE_COUNTER_LOCAL_UPDATE_ADD(LocalCounter);
 
 	}
 
@@ -109,3 +142,5 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
+
+MICROPROFILE_DEFINE_LOCAL_COUNTER(LocalCounter, "/runtime/localcounter");

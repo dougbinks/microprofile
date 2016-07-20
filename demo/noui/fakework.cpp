@@ -40,20 +40,8 @@ void usleep(__int64 usec)
 #endif
 
 
-void spinsleep(int64_t nUs)
-{
-	MICROPROFILE_SCOPEI("spin","sleep", 0xffff);
-	float fToMs = MicroProfileTickToMsMultiplier(MicroProfileTicksPerSecondCpu());
-	int64_t nTickStart = MP_TICK();
-	float fElapsed = 0;
-	float fTarget = nUs / 1000000.f;
-	do
-	{
-		int64_t nTickEnd = MP_TICK();
-		fElapsed = (nTickEnd - nTickStart) * fToMs;
-
-	}while(fElapsed < fTarget);
-}
+MICROPROFILE_DEFINE_LOCAL_ATOMIC_COUNTER(ThreadsStarted, "/runtime/threadsstarted");
+MICROPROFILE_DECLARE_LOCAL_ATOMIC_COUNTER(ThreadSpinSleep);
 
 MICROPROFILE_DECLARE(ThreadSafeMain);
 MICROPROFILE_DECLARE(ThreadSafeInner0);
@@ -69,9 +57,27 @@ MICROPROFILE_DEFINE(ThreadSafeInner0,"ThreadSafe", "Inner0", 0xff00bbee);
 MICROPROFILE_DEFINE(ThreadSafeMain,"ThreadSafe", "Main", 0xffdd3355);
 
 
+void spinsleep(int64_t nUs)
+{
+	MICROPROFILE_COUNTER_LOCAL_ADD(ThreadSpinSleep, 1);
+	MICROPROFILE_SCOPEI("spin","sleep", 0xffff);
+#if MICROPROFILE_ENABLED
+	float fToMs = MicroProfileTickToMsMultiplier(MicroProfileTicksPerSecondCpu());
+	int64_t nTickStart = MP_TICK();
+	float fElapsed = 0;
+	float fTarget = nUs / 1000000.f;
+	do
+	{
+		int64_t nTickEnd = MP_TICK();
+		fElapsed = (nTickEnd - nTickStart) * fToMs;
+
+	}while(fElapsed < fTarget);
+#endif
+}
 
 void WorkerThreadLong(int threadId)
 {
+	MICROPROFILE_COUNTER_LOCAL_ADD(ThreadsStarted, 1);
 	uint32_t c0 = 0xff3399ff;
 	uint32_t c1 = 0xffff99ff;
 	char name[100];
@@ -93,6 +99,8 @@ void WorkerThreadLong(int threadId)
 
 void WorkerThread(int threadId)
 {
+	MICROPROFILE_COUNTER_LOCAL_ADD(ThreadsStarted, 1);
+
 	char name[100];
 	snprintf(name, 99, "Worker%d", threadId);
 	MicroProfileOnThreadCreate(&name[0]);
@@ -182,6 +190,8 @@ void WorkerThread(int threadId)
 					{
 						MICROPROFILE_SCOPEI("ThreadWork", "Inner1", c4);
 						usleep(50);
+						MICROPROFILE_SCOPEI("ThreadWork", "Inner1", c4);
+						usleep(50);
 						MICROPROFILE_SCOPEI("ThreadWork", "Inner2", c2);
 						usleep(50);
 						MICROPROFILE_SCOPEI("ThreadWork", "Inner3", c3);
@@ -218,6 +228,7 @@ void WorkerThread(int threadId)
 			break;
 		}
 	}
+
 }
 
 std::thread t0;

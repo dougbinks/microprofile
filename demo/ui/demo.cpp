@@ -69,6 +69,20 @@ MICROPROFILE_DEFINE(MAIN, "MAIN", "Main", 0xff0000);
 
 
 
+void HammerThread()
+{
+	MicroProfileOnThreadCreate("HammerThread");
+	while (!g_nQuit)
+	{
+		MICROPROFILE_SCOPEI("Hammer", "Thread", 0xff00ff);
+		usleep(10);
+
+	}
+	MicroProfileOnThreadExit();
+}
+
+
+
 void HandleEvent(SDL_Event* pEvt)
 {
 	switch(pEvt->type)
@@ -112,7 +126,7 @@ void HandleEvent(SDL_Event* pEvt)
 #if MICROPROFILE_WEBSERVER
 		if(pEvt->key.keysym.sym == 'd')
 		{
-			MicroProfileDumpFile("../dump.html", "../dump.csv");
+			MicroProfileDumpFile("../dump.html", "../dump.csv", -1, -1);
 		}
 #endif
 		if(pEvt->key.keysym.sym == 'l')
@@ -178,6 +192,7 @@ void MicroProfileEndDraw();
 
 void StartFakeWork();
 void StopFakeWork();
+MICROPROFILE_DEFINE_LOCAL_ATOMIC_COUNTER(SDLFrameEvents, "/runtime/sdl_frame_events");
 
 
 #ifdef _WIN32
@@ -193,12 +208,10 @@ int main(int argc, char* argv[])
 	MICROPROFILE_REGISTER_GROUP("Thread1", "Threads", 0x88008800);
 	MICROPROFILE_REGISTER_GROUP("Thread2", "Threads", 0x88008800);
 	MICROPROFILE_REGISTER_GROUP("Thread2xx", "Threads", 0x88008800);
-	MICROPROFILE_REGISTER_GROUP("GPU", "main", 0x88fff00f);
 	MICROPROFILE_REGISTER_GROUP("MAIN", "main", 0x88fff00f);
 
 
-	g_QueueGraphics = MICROPROFILE_GPU_INIT_QUEUE("GPU-Graphics-Queue");
-	MICROPROFILE_GPU_BEGIN(0);
+	MICROPROFILE_CONDITIONAL(g_QueueGraphics = MICROPROFILE_GPU_INIT_QUEUE("GPU-Graphics-Queue"));
 
 	printf("press 'z' to toggle microprofile drawing\n");
 	printf("press 'right shift' to pause microprofile update\n");
@@ -237,7 +250,7 @@ int main(int argc, char* argv[])
 	}
 	glGetError(); //glew generates an error
 		
-
+	std::thread HT(HammerThread);
 
 #if MICROPROFILE_ENABLED
 	MicroProfileGpuInitGL();
@@ -270,10 +283,10 @@ int main(int argc, char* argv[])
 	MicroProfileCustomGroupAddTimer("ThreadSafe", "ThreadSafe", "inner3");
 	MicroProfileCustomGroupAddTimer("ThreadSafe", "ThreadSafe", "inner4");
 #endif
-	MICROPROFILE_COUNTER_CONFIG("memory/main", MICROPROFILE_COUNTER_FORMAT_BYTES, 10ll<<30ll);
-	MICROPROFILE_COUNTER_CONFIG("memory/gpu/indexbuffers", MICROPROFILE_COUNTER_FORMAT_BYTES, 0);
-	MICROPROFILE_COUNTER_CONFIG("memory/gpu/vertexbuffers", MICROPROFILE_COUNTER_FORMAT_BYTES, 0);
-	MICROPROFILE_COUNTER_CONFIG("memory/mainx", MICROPROFILE_COUNTER_FORMAT_BYTES, 10000);
+	MICROPROFILE_COUNTER_CONFIG("memory/main", MICROPROFILE_COUNTER_FORMAT_BYTES, 10ll<<30ll, 0);
+	MICROPROFILE_COUNTER_CONFIG("memory/gpu/indexbuffers", MICROPROFILE_COUNTER_FORMAT_BYTES, 0, 0);
+	MICROPROFILE_COUNTER_CONFIG("memory/gpu/vertexbuffers", MICROPROFILE_COUNTER_FORMAT_BYTES, 0, 0);
+	MICROPROFILE_COUNTER_CONFIG("memory/mainx", MICROPROFILE_COUNTER_FORMAT_BYTES, 10000, 0);
 
 	MICROPROFILE_COUNTER_ADD("memory/main", 1000);
 	MICROPROFILE_COUNTER_ADD("memory/gpu/vertexbuffers", 1000);
@@ -284,7 +297,7 @@ int main(int argc, char* argv[])
 	MICROPROFILE_COUNTER_ADD("//memoryx//mainx/", 1000);
 	MICROPROFILE_COUNTER_ADD("//memoryy//main/", -1000000);
 	MICROPROFILE_COUNTER_ADD("//\\\\///lala////lelel", 1000);
-	MICROPROFILE_COUNTER_CONFIG("engine/frames", MICROPROFILE_COUNTER_FORMAT_DEFAULT, 1000);
+	MICROPROFILE_COUNTER_CONFIG("engine/frames", MICROPROFILE_COUNTER_FORMAT_DEFAULT, 1000, 0);
 	MICROPROFILE_COUNTER_SET("fisk/geder/", 42);
 	MICROPROFILE_COUNTER_SET("fisk/aborre/", -2002);
 	MICROPROFILE_COUNTER_SET_LIMIT("fisk/aborre/", 120);
@@ -292,22 +305,27 @@ int main(int argc, char* argv[])
 	static uint64_t FramesX = 0;
 	MICROPROFILE_COUNTER_SET_INT64_PTR("frames/int64", &FramesX);
 	MICROPROFILE_COUNTER_SET_INT32_PTR("frames/int32", &Frames);
-	//MICROPROFILE_COUNTER_ADD("//\\\\///", 1000); // this should assert as theres only delimiters
+
+	MICROPROFILE_COUNTER_CONFIG("/test/sinus", MICROPROFILE_COUNTER_FORMAT_BYTES, 0, MICROPROFILE_COUNTER_FLAG_DETAILED);
+	MICROPROFILE_COUNTER_CONFIG("/test/cosinus", MICROPROFILE_COUNTER_FORMAT_DEFAULT, 0, MICROPROFILE_COUNTER_FLAG_DETAILED);
+	MICROPROFILE_COUNTER_CONFIG("/runtime/sdl_frame_events", MICROPROFILE_COUNTER_FORMAT_DEFAULT, 0, MICROPROFILE_COUNTER_FLAG_DETAILED);
+
 	StartFakeWork();
 	while(!g_nQuit)
 	{
 		Frames++;
-		FramesX += 1024;
+		FramesX += 1024*1024;
 		MICROPROFILE_SCOPE(MAIN);
 		MICROPROFILE_COUNTER_ADD("engine/frames", 1);
 
 		SDL_Event Evt;
 		while(SDL_PollEvent(&Evt))
 		{
-			MICROPROFILE_COUNTER_ADD("engine/sdl_events", 1);
+			MICROPROFILE_COUNTER_LOCAL_ADD(SDLFrameEvents, 1);
 			HandleEvent(&Evt);
 		}
 
+		MICROPROFILE_COUNTER_LOCAL_UPDATE_SET(SDLFrameEvents);
 		glClearColor(0.3f,0.4f,0.6f,0.f);
 		glViewport(0, 0, WIDTH, HEIGHT);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -334,9 +352,13 @@ int main(int argc, char* argv[])
 		g_MouseDelta = 0;
 
 
-		MICROPROFILE_GPU_SUBMIT(g_QueueGraphics, MICROPROFILE_GPU_END());
 		MicroProfileFlip(0);
-		MICROPROFILE_GPU_BEGIN(0);
+		static float f = 0;
+		f += 0.1f;
+		int sinus = (int)(10000000 * (sinf(f)));
+		int cosinus = int(cosf(f*1.3f) * 100000 + 50000);
+		MICROPROFILE_COUNTER_SET("/test/sinus", sinus);
+		MICROPROFILE_COUNTER_SET("/test/cosinus", cosinus);
 		{
 			MICROPROFILE_SCOPEGPUI("MicroProfileDraw", 0x88dd44);
 			float projection[16];

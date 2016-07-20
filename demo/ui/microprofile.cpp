@@ -40,11 +40,10 @@ void uprintf(const char* fmt, ...)
 #define MICROPROFILE_PRINTF uprintf
 #endif
 
-#include "microprofile.h"
 //#define MICROPROFILE_WEBSERVER 0
 #define MICROPROFILEUI_IMPL
-#include "microprofileui.h"
 #include "microprofile.h"
+#include "microprofileui.h"
 
 #include "glinc.h"
 
@@ -73,7 +72,7 @@ namespace
 	MicroProfileVertex nDrawBuffer[MICROPROFILE_MAX_VERTICES];
 	enum
 	{
-		MAX_COMMANDS = 32,
+		MAX_COMMANDS = 1024,
 	};
 	struct 
 	{
@@ -366,7 +365,7 @@ void MicroProfileEndDraw()
 }
 
 
-
+#if MICROPROFILEUI_ENABLED
 void MicroProfileDrawText(int nX, int nY, uint32_t nColor, const char* pText, uint32_t nLen)
 {
 	MICROPROFILE_SCOPEI("MicroProfile", "TextDraw", 0xff88ee);
@@ -487,7 +486,7 @@ void MicroProfileDrawLine2D(uint32_t nVertices, float* pVertices, uint32_t nColo
 	if(!nVertices) return;
 
 	MicroProfileVertex* pVertex = PushVertices(GL_LINES, 2*(nVertices-1));
-	nColor = 0xff000000|((nColor&0xff)<<16)|(nColor&0xff00ff00)|((nColor>>16)&0xff);
+	nColor = ((nColor&0xff)<<16)|(nColor&0xff00ff00)|((nColor>>16)&0xff);
 	for(uint32_t i = 0; i < nVertices-1; ++i)
 	{
 		pVertex[0].nX = pVertices[i*2];
@@ -503,6 +502,7 @@ void MicroProfileDrawLine2D(uint32_t nVertices, float* pVertices, uint32_t nColo
 		pVertex += 2;
 	}
 }
+#endif
 
 namespace
 {

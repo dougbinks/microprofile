@@ -56,6 +56,10 @@ ID3D12Fence* g_pFenceCompute = 0;
 UINT g_nSrc = 0;
 UINT g_nDst = 1;
 
+#if MICROPROFILE_ENABLED
+MicroProfileThreadLogGpu* g_gpuThreadLog[NumContexts];
+#endif
+
 inline void ThrowIfFailed(HRESULT hr)
 {
 	if (FAILED(hr))
@@ -64,7 +68,7 @@ inline void ThrowIfFailed(HRESULT hr)
 	}
 }
 
-inline void GetAssetsPath(_Out_writes_(pathSize) WCHAR* path, UINT pathSize)
+inline void GetAssetsPath(_Out_writes_(pathSize) CHAR* path, UINT pathSize)
 {
 	if (path == nullptr)
 	{
@@ -79,14 +83,14 @@ inline void GetAssetsPath(_Out_writes_(pathSize) WCHAR* path, UINT pathSize)
 		throw;
 	}
 
-	WCHAR* lastSlash = wcsrchr(path, L'\\');
+	CHAR* lastSlash = strrchr(path, L'\\');
 	if (lastSlash)
 	{
 		*(lastSlash + 1) = NULL;
 	}
 }
 
-inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
+inline HRESULT ReadDataFromFile(LPCSTR filename, byte** data, UINT* size)
 {
 	using namespace Microsoft::WRL;
 
@@ -99,13 +103,14 @@ inline HRESULT ReadDataFromFile(LPCWSTR filename, byte** data, UINT* size)
 	extendedParams.hTemplateFile = nullptr;
 
 	Wrappers::FileHandle file(
-		CreateFile2(
+		CreateFile(
 			filename,
 			GENERIC_READ,
 			FILE_SHARE_READ,
+			NULL,
 			OPEN_EXISTING,
-			&extendedParams
-			)
+			FILE_ATTRIBUTE_NORMAL,
+			NULL)
 		);
 
 	if (file.Get() == INVALID_HANDLE_VALUE)
@@ -412,11 +417,11 @@ private:
 class DXSample
 {
 public:
-	DXSample(UINT width, UINT height, std::wstring name);
+	DXSample(UINT width, UINT height, std::string name);
 	virtual ~DXSample();
 
 	int Run(HINSTANCE hInstance, int nCmdShow);
-	void SetCustomWindowText(LPCWSTR text);
+	void SetCustomWindowText(LPCSTR text);
 
 protected:
 	virtual void OnInit() = 0;
@@ -425,7 +430,7 @@ protected:
 	virtual void OnDestroy() = 0;
 	virtual bool OnEvent(MSG msg) = 0;
 
-	std::wstring GetAssetFullPath(LPCWSTR assetName);
+	std::string GetAssetFullPath(LPCSTR assetName);
 	void GetHardwareAdapter(_In_ IDXGIFactory4* pFactory, _Outptr_result_maybenull_ IDXGIAdapter1** ppAdapter);
 
 	static LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -445,23 +450,23 @@ private:
 	void ParseCommandLineArgs();
 
 	// Root assets path.
-	std::wstring m_assetsPath;
+	std::string m_assetsPath;
 
 	// Window title.
-	std::wstring m_title;
+	std::string m_title;
 };
 
 
-DXSample::DXSample(UINT width, UINT height, std::wstring name) :
+DXSample::DXSample(UINT width, UINT height, std::string name) :
 	m_width(width),
 	m_height(height),
 	m_useWarpDevice(false)
 {
 	ParseCommandLineArgs();
 
-	m_title = name + (m_useWarpDevice ? L" (WARP)" : L"");
+	m_title = name + (m_useWarpDevice ? " (WARP)" : "");
 
-	WCHAR assetsPath[512];
+	CHAR assetsPath[512];
 	GetAssetsPath(assetsPath, _countof(assetsPath));
 	m_assetsPath = assetsPath;
 
@@ -481,7 +486,7 @@ int DXSample::Run(HINSTANCE hInstance, int nCmdShow)
 	windowClass.lpfnWndProc = WindowProc;
 	windowClass.hInstance = hInstance;
 	windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-	windowClass.lpszClassName = L"WindowClass1";
+	windowClass.lpszClassName = "WindowClass1";
 	RegisterClassEx(&windowClass);
 
 	RECT windowRect = { 0, 0, static_cast<LONG>(m_width), static_cast<LONG>(m_height) };
@@ -489,7 +494,7 @@ int DXSample::Run(HINSTANCE hInstance, int nCmdShow)
 
 	// Create the window and store a handle to it.
 	m_hwnd = CreateWindowEx(NULL,
-		L"WindowClass1",
+		"WindowClass1",
 		m_title.c_str(),
 		WS_OVERLAPPEDWINDOW,
 		300,
@@ -503,8 +508,8 @@ int DXSample::Run(HINSTANCE hInstance, int nCmdShow)
 
 	ShowWindow(m_hwnd, nCmdShow);
 
-	g_QueueGraphics = MICROPROFILE_GPU_INIT_QUEUE("GPU-Graphics-Queue");
-	g_QueueCompute = MICROPROFILE_GPU_INIT_QUEUE("GPU-Compute-Queue");
+	MICROPROFILE_CONDITIONAL( g_QueueGraphics = MICROPROFILE_GPU_INIT_QUEUE("GPU-Graphics-Queue"));
+	MICROPROFILE_CONDITIONAL( g_QueueCompute = MICROPROFILE_GPU_INIT_QUEUE("GPU-Compute-Queue"));
 
 	MicroProfileOnThreadCreate("Main");
 	MicroProfileSetForceEnable(true);
@@ -514,7 +519,7 @@ int DXSample::Run(HINSTANCE hInstance, int nCmdShow)
 	// Initialize the sample. OnInit is defined in each child-implementation of DXSample.
 	OnInit();
 
-
+#if MICROPROFILE_ENABLED
 	for (uint32_t i = 0; i < _countof(g_TokenGpuFrameIndex); ++i)
 	{
 		char frame[255];
@@ -528,8 +533,14 @@ int DXSample::Run(HINSTANCE hInstance, int nCmdShow)
 		snprintf(frame, sizeof(frame) - 1, "Compute-Write-%d", i);
 		g_TokenGpuComputeFrameIndex[i] = MicroProfileGetToken("GPU", frame, (uint32_t)-1, MicroProfileTokenTypeGpu);
 	}
-
 	MicroProfileGpuInitD3D12(g_pDevice, g_pCommandQueue);
+
+
+	for (int i = 0; i < NumContexts; ++i)
+	{
+		g_gpuThreadLog[i] = MicroProfileThreadLogGpuAlloc();
+	}
+#endif
 
 	// Main sample loop.
 	MSG msg = { 0 };
@@ -560,7 +571,7 @@ int DXSample::Run(HINSTANCE hInstance, int nCmdShow)
 }
 
 // Helper function for resolving the full path of assets.
-std::wstring DXSample::GetAssetFullPath(LPCWSTR assetName)
+std::string DXSample::GetAssetFullPath(LPCSTR assetName)
 {
 	return m_assetsPath + assetName;
 }
@@ -596,9 +607,9 @@ void DXSample::GetHardwareAdapter(_In_ IDXGIFactory4* pFactory, _Outptr_result_m
 }
 
 // Helper function for setting the window's title text.
-void DXSample::SetCustomWindowText(LPCWSTR text)
+void DXSample::SetCustomWindowText(LPCSTR text)
 {
-	std::wstring windowText = m_title + L": " + text;
+	std::string windowText = m_title + ": " + text;
 	SetWindowText(m_hwnd, windowText.c_str());
 }
 
@@ -721,7 +732,7 @@ public:
 class D3D12Multithreading : public DXSample
 {
 public:
-	D3D12Multithreading(UINT width, UINT height, std::wstring name);
+	D3D12Multithreading(UINT width, UINT height, std::string name);
 	virtual ~D3D12Multithreading();
 
 	static D3D12Multithreading* Get() { return s_app; }
@@ -794,6 +805,7 @@ private:
 	ComPtr<ID3D12Fence> m_fence;
 	UINT64 m_fenceValue;
 
+
 	// Singleton object so that worker threads can share members.
 	static D3D12Multithreading* s_app;
 
@@ -828,7 +840,7 @@ private:
 
 D3D12Multithreading* D3D12Multithreading::s_app = nullptr;
 
-D3D12Multithreading::D3D12Multithreading(UINT width, UINT height, std::wstring name) :
+D3D12Multithreading::D3D12Multithreading(UINT width, UINT height, std::string name) :
 	DXSample(width, height, name),
 	m_frameIndex(0),
 	m_viewport(),
@@ -1637,6 +1649,12 @@ void D3D12Multithreading::OnRender()
 		MICROPROFILE_GPU_SUBMIT(g_QueueGraphics, m_pCurrentFrameResource->m_sceneMicroProfile[i]);
 	}
 
+	for (uint32_t i = 0; i < NumContexts; ++i)
+	{
+		MICROPROFILE_THREADLOGGPURESET(g_gpuThreadLog[i]);
+	}
+
+
 
 	ID3D12CommandList** ppCommandLists = m_pCurrentFrameResource->m_batchSubmit + NumContexts + 2;
 	uint32_t nCount = _countof(m_pCurrentFrameResource->m_batchSubmit) - NumContexts - 2;
@@ -1651,8 +1669,8 @@ void D3D12Multithreading::OnRender()
 	m_cpuTimer.Tick(NULL);
 	if (m_titleCount == TitleThrottle)
 	{
-		WCHAR cpu[64];
-		swprintf_s(cpu, L"%.4f CPU", m_cpuTime / m_titleCount);
+		CHAR cpu[64];
+		sprintf_s(cpu, "%.4f CPU", m_cpuTime / m_titleCount);
 		SetCustomWindowText(cpu);
 
 		m_titleCount = 0;
@@ -1784,10 +1802,11 @@ void D3D12Multithreading::BeginFrame()
 	counter++;
 	{
 		ID3D12GraphicsCommandList* pCommandList = m_pCurrentFrameResource->m_commandListCompute.Get();
-		MicroProfileGpuBegin(pCommandList);
+		MICROPROFILE_CONDITIONAL(MicroProfileThreadLogGpu* pGpuLog = MicroProfileThreadLogGpuAlloc());
+		MICROPROFILE_GPU_BEGIN(pCommandList, pGpuLog);
 		{
-			MICROPROFILE_SCOPEGPU_TOKEN(g_TokenGpuComputeFrameIndex[g_nDst]);
-			MICROPROFILE_SCOPEGPUI("Compute-Demo", 0xffffffff);
+			MICROPROFILE_SCOPEGPU_TOKEN_L(pGpuLog, g_TokenGpuComputeFrameIndex[g_nDst]);
+			MICROPROFILE_SCOPEGPUI_L(pGpuLog, "Compute-Demo", 0xffffffff);
 			ID3D12DescriptorHeap* ppHeaps[] = { m_computeSrvUavHeap.Get() };
 			pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 			pCommandList->SetComputeRootSignature(g_pComputeRootSignature);
@@ -1827,8 +1846,9 @@ void D3D12Multithreading::BeginFrame()
 		g_FenceCompute++;
 		g_pComputeQueue->Signal(g_pFenceCompute, g_FenceCompute);
 		m_pCurrentFrameResource->m_computeFenceValue = g_FenceCompute;
-		uint64_t nGpuBlock = MicroProfileGpuEnd();
+		uint64_t nGpuBlock = MICROPROFILE_GPU_END(pGpuLog);
 		MICROPROFILE_GPU_SUBMIT(g_QueueCompute, nGpuBlock);
+		MICROPROFILE_CONDITIONAL( MicroProfileThreadLogGpuFree(pGpuLog) );
 	}
 
 	// Indicate that the back buffer will be used as a render target.
@@ -1889,6 +1909,9 @@ void D3D12Multithreading::WorkerThread(int threadIndex)
 		//
 		// Shadow pass
 		//
+		
+
+		MICROPROFILE_CONDITIONAL( MicroProfileThreadLogGpu* pMicroProfileLog = g_gpuThreadLog[threadIndex] );
 
 		// Populate the command list.
 		SetCommonPipelineState(pShadowCommandList);
@@ -1903,10 +1926,10 @@ void D3D12Multithreading::WorkerThread(int threadIndex)
 		PIXBeginEvent(pShadowCommandList, 0, L"Worker drawing shadow pass...");
 		{
 			MICROPROFILE_SCOPEI("CPU", "Shadows", 0xff00ff00);
-			MicroProfileGpuBegin(pShadowCommandList);
+			MICROPROFILE_GPU_BEGIN(pShadowCommandList, pMicroProfileLog);
 			{
-				MICROPROFILE_SCOPEGPU_TOKEN(g_TokenGpuFrameIndex[g_nSrc]);
- 				MICROPROFILE_SCOPEGPUI("Shadows", 0xff00);
+				MICROPROFILE_SCOPEGPU_TOKEN_L(pMicroProfileLog, g_TokenGpuFrameIndex[g_nSrc]);
+ 				MICROPROFILE_SCOPEGPUI_L(pMicroProfileLog, "Shadows", 0xff00);
 
 				for (int j = threadIndex; j < _countof(SampleAssets::Draws); j += NumContexts)
 				{
@@ -1916,7 +1939,7 @@ void D3D12Multithreading::WorkerThread(int threadIndex)
 				}
 			}
 
-			m_pCurrentFrameResource->m_shadowMicroProfile[threadIndex] = MicroProfileGpuEnd();
+			m_pCurrentFrameResource->m_shadowMicroProfile[threadIndex] = MICROPROFILE_GPU_END(pMicroProfileLog);
 
 		}
 
@@ -1935,11 +1958,11 @@ void D3D12Multithreading::WorkerThread(int threadIndex)
 
 		// Populate the command list.  These can only be sent after the shadow 
 		// passes for this frame have been submitted.
-		MicroProfileGpuBegin(pSceneCommandList);
+		MICROPROFILE_GPU_BEGIN(pSceneCommandList, pMicroProfileLog);
 		{
 			MICROPROFILE_SCOPEI("CPU", "Scene", 0xff00ffff);
-			MICROPROFILE_SCOPEGPU_TOKEN(g_TokenGpuFrameIndex[g_nSrc]);
-			MICROPROFILE_SCOPEGPUI("scene", 0xff0000);
+			MICROPROFILE_SCOPEGPU_TOKEN_L(pMicroProfileLog, g_TokenGpuFrameIndex[g_nSrc]);
+			MICROPROFILE_SCOPEGPUI_L(pMicroProfileLog, "scene", 0xff0000);
 			SetCommonPipelineState(pSceneCommandList);
 			CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
 			CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
@@ -1963,7 +1986,7 @@ void D3D12Multithreading::WorkerThread(int threadIndex)
 
 			PIXEndEvent(pSceneCommandList);
 		}
-		m_pCurrentFrameResource->m_sceneMicroProfile[threadIndex] = MicroProfileGpuEnd();
+		m_pCurrentFrameResource->m_sceneMicroProfile[threadIndex] = MICROPROFILE_GPU_END(pMicroProfileLog);
 		ThrowIfFailed(pSceneCommandList->Close());
 
 #if !SINGLETHREADED
@@ -2001,7 +2024,7 @@ void D3D12Multithreading::SetCommonPipelineState(ID3D12GraphicsCommandList* pCom
 _Use_decl_annotations_
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
-	D3D12Multithreading sample(1280, 720, L"D3D12 Multithreading Sample");
+	D3D12Multithreading sample(1280, 720, "D3D12 Multithreading Sample");
 	return sample.Run(hInstance, nCmdShow);
 }
 
