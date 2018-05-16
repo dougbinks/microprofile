@@ -2332,7 +2332,7 @@ void MicroProfileFlip(void* pContext)
 
 	if(S.nRunning || S.nForceEnable)
 	{
-		int64_t nGpuWork = MicroProfileGpuEnd(S.pGpuGlobal);
+		uint64_t nGpuWork = MicroProfileGpuEnd(S.pGpuGlobal);
 		MicroProfileGpuSubmit(S.GpuQueue, nGpuWork);
 		MicroProfileThreadLogGpuReset(S.pGpuGlobal);
 		for (uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
