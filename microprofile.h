@@ -1613,17 +1613,12 @@ int MicroProfileInitGpuQueue(const char* pQueueName)
 	MicroProfileThreadLog* pLog = MicroProfileCreateThreadLog(pQueueName);
 	pLog->nGpu = 1;
 	pLog->nThreadId = 0;
-	for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
-	{
-		if(S.Pool[i] == pLog)
-		{
-			MicroProfileRegisterGroup(pQueueName, "GPU", (uint32_t)-1);
-			return i;
-		}
-	}
-	MP_BREAK();
-	return 0;
+
+	MicroProfileRegisterGroup(pQueueName, "GPU", (uint32_t)-1);
+	MP_ASSERT( S.Pool[ pLog->nLogIndex ] == pLog );
+	return pLog->nLogIndex;
 }
+
 MicroProfileThreadLogGpu* MicroProfileGetGlobaGpuThreadLog()
 {
 	return S.pGpuGlobal;
