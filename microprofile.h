@@ -639,7 +639,7 @@ struct MicroProfileInternalThread
 #endif
 
 #ifndef MICROPROFILE_MAX_THREADS
-#define MICROPROFILE_MAX_THREADS 64
+#define MICROPROFILE_MAX_THREADS 128
 #endif 
 
 #ifndef MICROPROFILE_UNPACK_RED
@@ -1573,7 +1573,7 @@ MicroProfileThreadLogGpu* MicroProfileThreadLogGpuAlloc()
 
  int MicroProfileGetGpuQueue(const char* pQueueName)
  {
-	 for (uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; i++)
+	 for (uint32_t i = 0; i < S.nNumLogsGpu; i++)
 	 {
 		 MicroProfileThreadLog* pLog = S.Pool[i];
 		 if (pLog && pLog->nGpu && pLog->nActive && 0 == MP_STRCASECMP(pQueueName, pLog->ThreadName))
@@ -1587,7 +1587,7 @@ MicroProfileThreadLogGpu* MicroProfileThreadLogGpuAlloc()
 
 MicroProfileThreadLog* MicroProfileGetGpuQueueLog(const char* pQueueName)
 {
-	for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; i++)
+	for(uint32_t i = 0; i < S.nNumLogsGpu; i++)
 	{
 		MicroProfileThreadLog* pLog = S.Pool[i];
 		if(pLog && pLog->nGpu && pLog->nActive && 0 == MP_STRCASECMP(pQueueName, pLog->ThreadName))
@@ -2283,7 +2283,7 @@ void MicroProfileFlip(void* pContext)
 		if(!S.nRunning)
 			S.nPauseTicks = MP_TICK();
 		S.nToggleRunning = 0;
-		for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+		for(uint32_t i = 0; i < S.nNumLogs; ++i)
 		{
 			MicroProfileThreadLog* pLog = S.Pool[i];
 			if(pLog)
@@ -2330,7 +2330,7 @@ void MicroProfileFlip(void* pContext)
 		uint64_t nGpuWork = MicroProfileGpuEnd(S.pGpuGlobal);
 		MicroProfileGpuSubmit(S.GpuQueue, nGpuWork);
 		MicroProfileThreadLogGpuReset(S.pGpuGlobal);
-		for (uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+		for (uint32_t i = 0; i < S.nNumLogsGpu; ++i)
 		{
 			if (S.PoolGpu[i])
 			{
@@ -2413,7 +2413,7 @@ void MicroProfileFlip(void* pContext)
 
 		uint8_t* pTimerToGroup = &S.TimerToGroup[0];
 		uint32_t nPutStart[MICROPROFILE_MAX_THREADS];
-		for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+		for(uint32_t i = 0; i < S.nNumLogs; ++i)
 		{
 			MicroProfileThreadLog* pLog = S.Pool[i];
 			if(!pLog)
@@ -2459,7 +2459,7 @@ void MicroProfileFlip(void* pContext)
 			}
 			{
 				MICROPROFILE_SCOPE(g_MicroProfileThreadLoop);
-				for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+				for(uint32_t i = 0; i < S.nNumLogs; ++i)
 				{
 					MicroProfileThreadLog* pLog = S.Pool[i];
 					if(!pLog) 
@@ -2628,7 +2628,7 @@ void MicroProfileFlip(void* pContext)
 			}
 		}
 
-		for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+		for(uint32_t i = 0; i < S.nNumLogs; ++i)
 		{
 			MicroProfileThreadLog* pLog = S.Pool[i];
 			if(pLog && nPutStart[i] != (uint32_t)-1)
@@ -2649,7 +2649,7 @@ void MicroProfileFlip(void* pContext)
 		memcpy(&S.AggregateGroup[0], &S.AccumGroup[0], sizeof(S.AggregateGroup));
 		memcpy(&S.AggregateGroupMax[0], &S.AccumGroupMax[0], sizeof(S.AggregateGroup));		
 
-		for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+		for(uint32_t i = 0; i < S.nNumLogs; ++i)
 		{
 			MicroProfileThreadLog* pLog = S.Pool[i];
 			if(!pLog) 

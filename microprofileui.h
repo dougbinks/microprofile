@@ -1043,7 +1043,7 @@ void MicroProfileDrawDetailedBars(uint32_t nWidth, uint32_t nHeight, int nBaseY,
 
 	if(!bSkipBarView)
 	{
-		for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+		for(uint32_t i = 0; i < S.nNumLogs; ++i)
 		{
 			MicroProfileThreadLog* pLog = S.Pool[i];
 			if(!pLog)
@@ -1265,7 +1265,7 @@ void MicroProfileDrawDetailedBars(uint32_t nWidth, uint32_t nHeight, int nBaseY,
 		uint32_t nNumThreads = 0;
 		MicroProfileThreadInfo Threads[MICROPROFILE_MAX_CONTEXT_SWITCH_THREADS];
 
-		for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS && S.Pool[i]; ++i)
+		for(uint32_t i = 0; i < S.nNumLogs && S.Pool[i]; ++i)
 			Threads[nNumThreads++] = MicroProfileGetThreadInfo(S.Pool[i]->nThreadId);
 		uint32_t nNumThreadsBase = nNumThreads;
 		if(S.bContextSwitchAllThreads)
@@ -3132,7 +3132,7 @@ void MicroProfileDraw(uint32_t nWidth, uint32_t nHeight)
 				MicroProfileStringArrayFormat(&Debug, "%9d [%7d]", S.nContextSwitchUsage, MICROPROFILE_CONTEXT_SWITCH_BUFFER_SIZE / S.nContextSwitchUsage );
 #endif
 
-				for(int i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+				for(int i = 0; i < (int)S.nNumLogs; ++i)
 				{
 					if(pFrameCurrent->nLogStart[i] && S.Pool[i])
 					{
