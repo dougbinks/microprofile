@@ -1944,6 +1944,7 @@ inline uint64_t MicroProfileLogPutEnter(MicroProfileToken nToken_, uint64_t nTic
 	uint32_t nGet = pLog->nGet.load(std::memory_order_relaxed);
 	uint32_t nDistance = (nGet - nNextPos) % MICROPROFILE_BUFFER_SIZE;
 	uint32_t nStackPut = ++(pLog->nStackPut);
+	MP_ASSERT(nStackPut < MICROPROFILE_STACK_MAX);
 	if (nDistance < nStackPut+1)
 	{
 		--pLog->nStackPut;
@@ -1964,8 +1965,8 @@ inline void MicroProfileLogPutLeave(MicroProfileToken nToken_, uint64_t nTick, M
 	uint64_t LE = MicroProfileMakeLogIndex(MP_LOG_LEAVE, nToken_, nTick);
 	uint32_t nPos = pLog->nPut.load(std::memory_order_relaxed);
 	uint32_t nNextPos = (nPos + 1) % MICROPROFILE_BUFFER_SIZE;
+	MP_ASSERT(pLog->nStackPut > 0);
 	uint32_t nStackPut = --(pLog->nStackPut);
-	MP_ASSERT(nStackPut < MICROPROFILE_STACK_MAX);
 	MP_ASSERT(nNextPos != nPos); //should never happen
 	pLog->Log[nPos] = LE;
 	pLog->nPut.store(nNextPos, std::memory_order_release);
