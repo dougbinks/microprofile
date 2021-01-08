@@ -639,7 +639,7 @@ struct MicroProfileInternalThread
 #endif
 
 #ifndef MICROPROFILE_MAX_THREADS
-#define MICROPROFILE_MAX_THREADS 128
+#define MICROPROFILE_MAX_THREADS 256
 #endif 
 
 #ifndef MICROPROFILE_UNPACK_RED
