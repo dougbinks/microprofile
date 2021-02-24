@@ -502,6 +502,12 @@ MICROPROFILE_API void MicroProfilePlatformMarkerBegin(uint32_t nColor, const cha
 MICROPROFILE_API void MicroProfilePlatformMarkerEnd();//not implemented by microprofile.
 #endif
 
+// expose some internals - does not work on all platforms
+#ifdef MICROPROFILE_EXPOSE_INTERNALS
+struct MicroProfileThreadLog;
+MICROPROFILE_API MicroProfileThreadLog* MicroProfileGetThreadLog();
+#endif
+
 struct MicroProfileThreadInfo
 {
 	//3 first members are used to sort. dont reorder
@@ -1460,7 +1466,7 @@ inline void MicroProfileSetThreadLog(MicroProfileThreadLog* pLog)
 	pthread_setspecific(g_MicroProfileThreadLogKey, pLog);
 }
 #else
-MicroProfileThreadLog* MicroProfileGetThreadLog()
+MICROPROFILE_API MicroProfileThreadLog* MicroProfileGetThreadLog()
 {
 	return g_MicroProfileThreadLogThreadLocal;
 }
