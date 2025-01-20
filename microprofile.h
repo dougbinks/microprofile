@@ -1463,29 +1463,30 @@ void MicroProfileInitThreadStorage( uint32_t nNewMaxThreads )
 		mutex.lock();
     if( nNewMaxThreads > S.nMaxThreads )
     {
-        uint32_t increase = S.nMaxThreads - nNewMaxThreads;
+        uint32_t oldMaxThreads = S.nMaxThreads;
+        uint32_t increase = nNewMaxThreads - S.nMaxThreads;
         S.nMaxThreads = nNewMaxThreads;
         for(uint32_t i = 0; i < MICROPROFILE_MAX_FRAME_HISTORY; ++i)
         {
             S.Frames[i].nLogStart = (uint32_t*)realloc( S.Frames[i].nLogStart, sizeof(uint32_t) * S.nMaxThreads );
-            memset( S.Frames[i].nLogStart, 0, sizeof(uint32_t) * S.nMaxThreads );
+            memset( S.Frames[i].nLogStart + oldMaxThreads, 0, sizeof(uint32_t) * increase );
         }
         S.nMemUsage += sizeof(uint32_t) * increase * MICROPROFILE_MAX_FRAME_HISTORY;
 
         S.nThreadActive = (uint32_t*)realloc( S.nThreadActive, sizeof(uint32_t) * S.nMaxThreads );
-        memset( S.nThreadActive, 0, sizeof(uint32_t) * S.nMaxThreads );
+        memset( S.nThreadActive + oldMaxThreads, 0, sizeof(uint32_t) * increase );
         S.nMemUsage += sizeof(uint32_t) * increase;
 
         S.Pool = (MicroProfileThreadLog**)realloc( S.Pool, sizeof(MicroProfileThreadLog*) * S.nMaxThreads );
-        memset( S.Pool, 0, sizeof(MicroProfileThreadLog*) * S.nMaxThreads );
+        memset( S.Pool + oldMaxThreads, 0, sizeof(MicroProfileThreadLog*) * increase );
         S.nMemUsage += sizeof(MicroProfileThreadLog*) * increase;
 
         S.PoolGpu = (MicroProfileThreadLogGpu**)realloc( S.PoolGpu, sizeof(MicroProfileThreadLogGpu*) * S.nMaxThreads );
-        memset( S.Pool, 0, sizeof(MicroProfileThreadLogGpu*) * S.nMaxThreads );
+        memset( S.PoolGpu + oldMaxThreads, 0, sizeof(MicroProfileThreadLogGpu*) * increase );
         S.nMemUsage += sizeof(MicroProfileThreadLogGpu*) * increase;
 
         S.nPutStart = (uint32_t*)realloc( S.nPutStart, sizeof(uint32_t) * S.nMaxThreads );
-        memset( S.nPutStart, 0, sizeof(uint32_t) * S.nMaxThreads );
+        memset( S.nPutStart + oldMaxThreads, 0, sizeof(uint32_t) * increase );
         S.nMemUsage += sizeof(uint32_t) * increase;
     }
 	if(bUseLock)
