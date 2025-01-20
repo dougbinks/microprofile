@@ -3201,7 +3201,7 @@ void MicroProfileDraw(uint32_t nWidth, uint32_t nHeight)
 					MicroProfileStringArrayAddLiteral(&ToolTip, "GPU Time");
 					MicroProfileStringArrayFormat(&ToolTip, "%6.2fms", fMsGpu);
 					#if MICROPROFILE_DEBUG
-					for(int i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+					for(int i = 0; i < S.nMaxThreads; ++i)
 					{
 						if(S.Frames[UI.nHoverFrame].nLogStart[i])
 						{
@@ -3372,6 +3372,10 @@ void MicroProfileDrawLineHorizontal(int nLeft, int nRight, int nY, uint32_t nCol
 
 #include <stdio.h>
 
+#ifndef MICROPROFILE_MAX_PROFILE_PRESET_THREADS
+#define MICROPROFILE_MAX_PROFILE_PRESET_THREADS 1024
+#endif
+
 #define MICROPROFILE_PRESET_HEADER_MAGIC 0x28586813
 #define MICROPROFILE_PRESET_HEADER_VERSION 0x00000102
 struct MicroProfilePresetHeader
@@ -3380,7 +3384,7 @@ struct MicroProfilePresetHeader
 	uint32_t nVersion;
 	//groups, threads, aggregate, reference frame, graphs timers
 	uint32_t nGroups[MICROPROFILE_MAX_GROUPS];
-	uint32_t nThreads[MICROPROFILE_MAX_THREADS];
+	uint32_t nThreads[MICROPROFILE_MAX_PROFILE_PRESET_THREADS];
 	uint32_t nGraphName[MICROPROFILE_MAX_GRAPHS];
 	uint32_t nGraphGroupName[MICROPROFILE_MAX_GRAPHS];
 	uint32_t nAllGroupsWanted;
@@ -3439,7 +3443,7 @@ void MicroProfileSavePreset(const char* pPresetName)
 		}
 		nMask <<= 1;
 	}
-	for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+	for(uint32_t i = 0; i < S.nMaxThreads && i < MICROPROFILE_MAX_PROFILE_PRESET_THREADS; ++i)
 	{
 		MicroProfileThreadLog* pLog = S.Pool[i];
 		if(pLog && S.nThreadActive[i])
@@ -3520,7 +3524,7 @@ void MicroProfileLoadPreset(const char* pSuffix)
 	UI.nOpacityForeground = Header.nOpacityForeground;
 	UI.bShowSpikes = Header.nShowSpikes == 1;
 
-	memset(&S.nThreadActive[0], 0, sizeof(S.nThreadActive));
+	memset(S.nThreadActive, 0, sizeof(uint32_t)*S.nMaxThreads);
 
 	for(uint32_t i = 0; i < MICROPROFILE_MAX_GROUPS; ++i)
 	{
@@ -3536,12 +3540,12 @@ void MicroProfileLoadPreset(const char* pSuffix)
 			}
 		}
 	}
-	for(uint32_t i = 0; i < MICROPROFILE_MAX_THREADS; ++i)
+	for(uint32_t i = 0; i < S.nMaxThreads && i < MICROPROFILE_MAX_PROFILE_PRESET_THREADS; ++i)
 	{
 		if(Header.nThreads[i])
 		{
 			const char* pThreadName = pBuffer + Header.nThreads[i];
-			for(uint32_t j = 0; j < MICROPROFILE_MAX_THREADS; ++j)
+			for(uint32_t j = 0; j < S.nMaxThreads; ++j)
 			{
 				MicroProfileThreadLog* pLog = S.Pool[j];
 				if(pLog && 0 == MP_STRCASECMP(pThreadName, &pLog->ThreadName[0]))
